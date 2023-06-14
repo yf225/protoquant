@@ -50,7 +50,6 @@ class Net(nn.Module):
         self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
-
         x = self.conv1(x)
         x = F.relu(x)
         x = self.conv2(x)
@@ -72,6 +71,8 @@ def train(args, model, rank, world_size, train_loader, optimizer, epoch, sampler
     if sampler:
         sampler.set_epoch(epoch)
     for batch_idx, (data, target) in enumerate(train_loader):
+        if rank == 0:
+            print(f"data.shape: {data.shape}")
         data, target = data.to(rank), target.to(rank)
         optimizer.zero_grad()
         output = model(data)
@@ -108,18 +109,32 @@ def test(model, rank, world_size, test_loader):
             100. * ddp_loss[1] / ddp_loss[2]))
 
 
+class RandomDataDataset(Dataset):
+    def __init__(self, num_samples):
+        self.num_samples = num_samples
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, index):
+        random_data = torch.randn(1, 28, 28)
+        return random_data
+
+
 def fsdp_main(rank, world_size, args):
     setup(rank, world_size)
 
-    transform=transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+    # transform=transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.1307,), (0.3081,))
+    # ])
 
-    dataset1 = datasets.MNIST('../data', train=True, download=True,
-                        transform=transform)
-    dataset2 = datasets.MNIST('../data', train=False,
-                        transform=transform)
+    # dataset1 = datasets.MNIST('../data', train=True, download=True,
+    #                     transform=transform)
+    # dataset2 = datasets.MNIST('../data', train=False,
+    #                     transform=transform)
+    dataset1 = RandomDataDataset(num_samples=1024)
+    dataset2 = RandomDataDataset(num_samples=1024)
 
     sampler1 = DistributedSampler(dataset1, rank=rank, num_replicas=world_size, shuffle=True)
     sampler2 = DistributedSampler(dataset2, rank=rank, num_replicas=world_size)
